@@ -1,96 +1,125 @@
-// importing the necessary libraries and packages
-import java.awt.*;
-import java.awt.event.*;
+import OneDollarRecognizer.OneDollarRecognizer;
+import OneDollarRecognizer.PointClass;
+import OneDollarRecognizer.Result;
+
 import javax.swing.*;
-import java.io.Serial;
-import java.util.*;
-import OneDollarRecognizer.*;
-import Result.Result;
+import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 
+public class Main extends JFrame {
+    private static final int WIDTH = 500;
+    private static final int HEIGHT = 500;
 
-// Main class
-public class Main {
-    public static void main(String[] args) {
-        // create an instance of JFrame for creating the frame which acts as a container
-        JFrame canvas_frame = new JFrame("Canvas");
-        Container content_pane = canvas_frame.getContentPane();
-        content_pane.setLayout(new BorderLayout());
-        // create an instance of DrawCanvas and add it to the content
-        DrawCanvas canvas = new DrawCanvas();
-        content_pane.add(canvas, BorderLayout.CENTER);
-        // we used JPanel for the controls such as minimize, close and maximize
-        JPanel add_controls = new JPanel();
-        content_pane.add(add_controls, BorderLayout.NORTH);
-        // created clearButton to reset the canvas using JButton
-        JButton clear = new JButton("Clear");
-        clear.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        clear.setPreferredSize(new Dimension(40, 40));
-        clear.addActionListener(e -> canvas.clear());
-        Label label = canvas.recognizeGesture();
-//
-//        //controls.add(clearButton);
-//        // add the clearButton to the bottom of the frame
-        canvas_frame.add(label);
-        canvas_frame.add(clear,"South");
-        canvas_frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        //setting the frame size
-        canvas_frame.setSize(500, 500);
-        // setting visibility to true
-        canvas_frame.setVisible(true);
-    }
-}
+    private PointClass start;
+    private PointClass stop;
+    public static ArrayList<PointClass> points = new ArrayList<>();
+    public static ArrayList<PointClass> prevpoints;
 
-class DrawCanvas extends JComponent {
-    @Serial private static final long serialVersionUID = 1L;
+    public static JPanel canvas;
+    public static JLabel l = new JLabel();
+    private Shape shape;
+    public Main() {
+        setTitle("Canvas");
+        setSize(WIDTH, HEIGHT);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        PathListener listener = new PathListener();
+        addMouseListener(listener);
+        addMouseMotionListener(listener);
 
-    public ArrayList<Point> points = new ArrayList<>();
-    // set statingPoint to NULL
-
-     Point startingPoint = null;
-
-    public DrawCanvas() {
-        //Add Mouse Event Listener when mouse is dragged
-        this.addMouseMotionListener(new MouseAdapter() {
-            public void mouseDragged(MouseEvent e) {
-                // getting the ending Point
-                Point endingPoint = e.getPoint();
-                System.out.println(endingPoint);
-                points.add(endingPoint);
-                System.out.println(points.size());
-                if (startingPoint != null) {
-                    // get graphics to draw the stroke on the canvas
-                    Graphics graphics = getGraphics();
-                    Graphics2D graphics2 = (Graphics2D) graphics;
-                    graphics2.setStroke(new BasicStroke(5));
-                    graphics2.setColor(Color.BLACK);
-                    // draw the line from starting point to the ending point
-                    graphics2.drawLine(startingPoint.x, startingPoint.y, endingPoint.x, endingPoint.y);
+        canvas = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                super.paintComponent(g2);
+                if (start != null && stop != null) {
+                    BasicStroke stroke = new BasicStroke(5);
+                    Shape strokedShape = stroke.createStrokedShape(shape);
+                    g2.draw(strokedShape);
+                    g2.fill(strokedShape);
                 }
-                // make the ending point as the starting point for the next line
-                startingPoint = endingPoint;
-
             }
+        };
+        canvas.setBackground(Color.WHITE);
+        JButton clearButton = new JButton("Clear");
+        clearButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        clearButton.addActionListener(e -> {
+            start=null;
+            stop=null;
+            prevpoints.clear();
+            canvas.repaint();
+            l.setText("");
         });
-    }
-    // clearing the canvas and making startPoint null
-    public void clear() {
-        startingPoint = null;
-        repaint();
+
+        getContentPane().setLayout(new BorderLayout());
+        getContentPane().add(l,BorderLayout.BEFORE_FIRST_LINE);
+        getContentPane().add(canvas, BorderLayout.CENTER);
+        getContentPane().add(clearButton, BorderLayout.SOUTH);
+        setVisible(true);
     }
 
-    public Label recognizeGesture(){
-        OneDollarRecognizer odr = new OneDollarRecognizer();
-        Result r = odr.Recognize(points);
-        String name = r.getName();
-        double score= r.getScore();
-        long t = r.getTime();
-        String s = "Result: "+ name + " " + "(" + score + ")" + "in " + t + "ms.";
-        System.out.println(s);
-        return new Label(s);
+
+    class PathListener extends MouseAdapter {
+        public void mousePressed(MouseEvent event) {
+            start = new PointClass(event.getPoint().x, event.getPoint().y);
+            // Add start point
+            points.add(start);
+            shape = new Path2D.Double();
+        }
+
+        public void mouseDragged(MouseEvent event) {
+            stop = new PointClass(event.getPoint().x, event.getPoint().y);
+            // Add end point
+            points.add(stop);
+            Path2D path = (Path2D) shape;
+            path.moveTo(start.x, start.y);
+            path.lineTo(stop.x, stop.y);
+            shape = path;
+            start = stop;
+            repaint();
+        }
+
+        public void mouseReleased(MouseEvent event) {
+            Path2D path = (Path2D) shape;
+            try {
+                path.closePath();
+            } catch (Exception exp) {
+                throw new RuntimeException(exp);
+            }
+            shape = path;
+            repaint();
+
+            if (!points.isEmpty()) {
+                prevpoints = new ArrayList<>(Arrays.asList(new PointClass[points.size()]));
+                Collections.copy(prevpoints, points);
+                if(prevpoints.size()<10){
+                    l.setText("Too few points made. Please try again.");
+                }
+                else {
+                    OneDollarRecognizer odr = new OneDollarRecognizer();
+                    odr.loadTemplates();
+                    Result r = odr.Recognize(prevpoints, true);
+                    String shapeName = r.getName();
+                    Double score = r.getScore();
+                    DecimalFormat df = new DecimalFormat("0.00");
+                    long time = r.getTime();
+                    l.setText("Result: " + shapeName + " (" + df.format(score) + ")" + " " + time + " ms");
+                }
+            }
+
+            // Clear from previous run
+            points.clear();
+        }
+
     }
+
+    public static void main(String[] args) {
+        new Main();
+    }
+
 }
-
-
-
-
-

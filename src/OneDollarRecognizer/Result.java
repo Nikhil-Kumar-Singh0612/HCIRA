@@ -1,6 +1,6 @@
-package Result;
+package OneDollarRecognizer;
 
-public class Result{
+public class Result {
     String Name;
     double Score;
     long time;
